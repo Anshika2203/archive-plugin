@@ -1,0 +1,5 @@
+FROM golang:1.17
+
+COPY release/windows/amd64/archive-plugin.exe C:/archive-plugin.exe
+
+ENTRYPOINT ["C:\\archive-plugin.exe"]
