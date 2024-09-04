@@ -6,6 +6,7 @@ package plugin
 
 import (
 	"archive/zip"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -13,10 +14,29 @@ import (
 	"strings"
 )
 
-type ZipPlugin struct{}
+type ZipPlugin struct {
+	Source   string `envconfig:"PLUGIN_SOURCE"`
+	Target   string `envconfig:"PLUGIN_TARGET"`
+	LogLevel string `envconfig:"PLUGIN_LOG_LEVEL"`
+}
 
-func (p *ZipPlugin) Zip(source, target string) error {
-	zipfile, err := os.Create(target)
+func (p *ZipPlugin) Exec(ctx context.Context) error {
+	sourceInfo, err := os.Stat(p.Source)
+	if err != nil {
+		return fmt.Errorf("error accessing source: %w", err)
+	}
+
+	if sourceInfo.IsDir() || !strings.HasSuffix(strings.ToLower(p.Source), ".zip") {
+		// Zipping
+		return p.Zip()
+	} else {
+		// Unzipping
+		return p.Unzip()
+	}
+}
+
+func (p *ZipPlugin) Zip() error {
+	zipfile, err := os.Create(p.Target)
 	if err != nil {
 		return err
 	}
@@ -25,17 +45,17 @@ func (p *ZipPlugin) Zip(source, target string) error {
 	archive := zip.NewWriter(zipfile)
 	defer archive.Close()
 
-	info, err := os.Stat(source)
+	info, err := os.Stat(p.Source)
 	if err != nil {
 		return nil
 	}
 
 	var baseDir string
 	if info.IsDir() {
-		baseDir = filepath.Base(source)
+		baseDir = filepath.Base(p.Source)
 	}
 
-	return filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
+	return filepath.Walk(p.Source, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -46,7 +66,7 @@ func (p *ZipPlugin) Zip(source, target string) error {
 		}
 
 		if baseDir != "" {
-			header.Name = filepath.Join(baseDir, strings.TrimPrefix(path, source))
+			header.Name = filepath.Join(baseDir, strings.TrimPrefix(path, p.Source))
 		}
 
 		if info.IsDir() {
@@ -74,15 +94,15 @@ func (p *ZipPlugin) Zip(source, target string) error {
 	})
 }
 
-func (p *ZipPlugin) Unzip(source, target string) error {
-	reader, err := zip.OpenReader(source)
+func (p *ZipPlugin) Unzip() error {
+	reader, err := zip.OpenReader(p.Source)
 	if err != nil {
 		return err
 	}
 	defer reader.Close()
 
 	for _, file := range reader.File {
-		path := filepath.Join(target, file.Name)
+		path := filepath.Join(p.Target, file.Name)
 		if file.FileInfo().IsDir() {
 			os.MkdirAll(path, file.Mode())
 			continue
@@ -106,41 +126,4 @@ func (p *ZipPlugin) Unzip(source, target string) error {
 		}
 	}
 	return nil
-}
-
-func main() {
-	source := os.Getenv("SOURCE")
-	target := os.Getenv("TARGET")
-
-	if source == "" || target == "" {
-		fmt.Println("Both SOURCE and TARGET environment variables must be set")
-		os.Exit(1)
-	}
-
-	plugin := &ZipPlugin{}
-
-	// Determine if we're zipping or unzipping based on the source file
-	sourceInfo, err := os.Stat(source)
-	if err != nil {
-		fmt.Printf("Error accessing source: %v\n", err)
-		os.Exit(1)
-	}
-
-	if sourceInfo.IsDir() || !strings.HasSuffix(strings.ToLower(source), ".zip") {
-		// Zipping
-		err = plugin.Zip(source, target)
-		if err != nil {
-			fmt.Printf("Error zipping: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("Zip operation completed successfully")
-	} else {
-		// Unzipping
-		err = plugin.Unzip(source, target)
-		if err != nil {
-			fmt.Printf("Error unzipping: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("Unzip operation completed successfully")
-	}
 }
