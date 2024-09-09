@@ -13,7 +13,7 @@ This repository contains a plugin for running zip/unzip compression
 
 ## Plugin Image
 
-The plugin `anshikaanand/blackduck-plugin` is available for the following architectures:
+The plugin `anshikaanand/archive-plugin` is available for the following architectures:
 
 | OS            | Tag             |
 |---------------|-----------------|
